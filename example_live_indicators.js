@@ -13,6 +13,9 @@ const LiveFeed = require("./src/feed/Live");
 // const DiskFeed      = require('./src/feed/Offline');
 const Indicators = require("technicalindicators");
 const HMA = require("./indicators/HMA");
+const HeikinAsh = require("./indicators/HeikinAsh");
+const RSIDiv = require("./indicators/RSIDiv");
+
 // Settings for your backtest/trading
 const RESOLUTION = "1h"; // '1m', '5m', '1h', '1d'
 const RUN_LIVE = true; // enable live feed or not (system waits for each new bar)
@@ -20,7 +23,7 @@ const HISTORICAL_BARS = 100; // how many bars to download before running live/ba
 const MAX_HISTORICAL_BARS = 1000;
 
 // const feed = new DiskFeed(__dirname+'/data/XBTUSD-1d.json');
-const dp = (value) => (value ? Number(value.toFixed(2)) : null);
+const dp = (value) => (value ? Number(value).toFixed(2) : null);
 
 const feed = new LiveFeed();
 
@@ -34,17 +37,19 @@ console.log(
 // Uncomment to see available indicators:
 // console.log(Indicators.AvailableIndicators);
 
-let SMA = new Indicators["SMA"]({ period: 30, values: [] });
-let RSI = new Indicators["RSI"]({ period: 14, values: [] });
-let ATR = new Indicators["ATR"]({ period: 14, high: [], low: [], close: [] });
-let WMA = new Indicators["WMA"]({ period: 30, values: [] });
+// let SMA = new Indicators["SMA"]({ period: 30, values: [] });
+// let RSI = new Indicators["RSI"]({ period: 14, values: [] });
+// let ATR = new Indicators["ATR"]({ period: 14, high: [], low: [], close: [] });
+// let WMA = new Indicators["WMA"]({ period: 30, values: [] });
+// let BBANDS = new Indicators["BollingerBands"]({
+//   period: 14,
+//   stdDev: 2,
+//   values: [],
+// });
 
-let BBANDS = new Indicators["BollingerBands"]({
-  period: 14,
-  stdDev: 2,
-  values: [],
-});
-let hma = new HMA(55);
+const hma = new HMA(50);
+const heikin = new HeikinAsh(17);
+// const rsi = new RSIDiv(14);
 
 function onclose(bar) {
   /*
@@ -59,12 +64,23 @@ function onclose(bar) {
   //   let bbands = BBANDS.nextValue(bar.close) || {};
 
   const hullSuite = hma.nextValue(bar.close, seriesClose);
+  const heikinAsh = heikin.nextValue(bar.open, bar.high, bar.low, bar.close);
+  //   const rsiDiv = rsi.nextValue(bar.close);
+
   //   console.log("***** " + hullSuite);
+
   console.log(
-    `${bar.closetimestamp} | close=${bar.close} hullSuite=${dp(
-      hullSuite[0]
-    )} color=${hullSuite[1]} `
+    `${bar.closetimestamp} | close=${dp(bar.close)}
+    hullSuite=${dp(hullSuite[0])} color=${hullSuite[1]} long=${
+      heikinAsh[0]
+    } longFinal= ${heikinAsh[1]} short=${heikinAsh[2]} shortFinal=${
+      heikinAsh[3]
+    } 
+    `
   );
+  // divBear=${rsiDiv[0]} divBull=${rsiDiv[1]} pivotH=${rsiDiv[2]} pivotL=${
+  //   rsiDiv[3]
+  // } rsiDiv=${rsiDiv[4]}
   // console.log(
   //   `${bar.closetimestamp} | close=${bar.close} atr=${dp(atr)} rsi=${dp(
   //     rsi
