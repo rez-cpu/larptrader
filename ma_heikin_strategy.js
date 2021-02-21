@@ -7,19 +7,25 @@
 
 // const LiveFeed      = require('./src/feed/Live');
 const DiskFeed = require("./src/feed/Offline");
+const LiveFeed = require("./src/feed/Live");
+
 const Backtester = require("./src/Backtester");
 const fs = require("fs");
-const Indicators = require("technicalindicators");
+
 const HMA = require("./indicators/HMA");
 const HeikinAsh = require("./indicators/HeikinAsh");
+const Indicators = require("technicalindicators");
 
 const MAX_HISTORICAL_BARS = 1000;
 
 // Settings for your backtest/trading
-const RESOLUTION = "5m"; // '1m', '5m', '1h', '1d'
-const RUN_LIVE = true; // enable live trading or not
+const RESOLUTION = "1h"; // '1m', '5m', '1h', '1d'
+const RUN_LIVE = false; // enable live trading or not
 const HISTORICAL_BARS = 1000; // how many bars to download before running live/backtest (max 1000)
-
+const atrMultiple = 1;
+const stopConstant = 0.01;
+const stops = false;
+const takeProfits = false;
 // Daily bars
 const filename = __dirname + "/data/XBTUSD-1d.json";
 
@@ -31,6 +37,7 @@ if (!fs.existsSync(filename)) {
 }
 
 // Data
+
 const feed = new DiskFeed(filename);
 
 // 'Backtest' the incoming data, can be used for Live or Offline bars
@@ -51,48 +58,98 @@ const hma = new HMA(55);
 // best gains
 // const hma = new HMA(50);
 const heikin = new HeikinAsh(17);
+const ATR = new Indicators["ATR"]({ period: 7, high: [], low: [], close: [] });
 
 // This function called everytime a new bar closes
 // including historical data. check the `.live` property of `bar` to see if old bar or new
 // `bar`:       the current bar which just closed
 // `series`:    list of all bars we've received, including the most recent one
 function onclose(bar, series) {
-  // console.log(bar);
-  //   console.log("Series = " + JSON.stringify(series));
+  // Trade Setup (for longs):
+  // Stop: Use a recent low (set a minimum stop range though)
+  // Entry: 1min bar close
+  // Target: take ATR(24) of hourly bars (last day of range activity)
+  // target = entry + HOURLY_ATR(24) *.95
+
   const hullSuite = hma.nextValue(bar.close, seriesClose);
   const heikinAsh = heikin.nextValue(bar.open, bar.high, bar.low, bar.close);
+  const atr = ATR.nextValue({ high: bar.high, low: bar.low, close: bar.close });
   // Get the previous bar
   let prevbar = prev(series, 1);
-
+  console.log(
+    "Current Price = " +
+      bar.close +
+      " | " +
+      bar.closetimestamp +
+      " ATR | " +
+      atr
+  );
   if (!prevbar) return;
+  larp.update(bar);
 
+  // check for take profits
+  if (larp.trade && takeProfits) {
+    if (
+      larp.trade.side == "long" &&
+      bar.close >= larp.trade.entry + (atr * atrMultiple).toFixed(2)
+    ) {
+      console.log("take profit long | close= " + bar.close);
+      larp.takeprofits(bar.close, 0.5, bar.closetimestamp);
+    } else if (
+      larp.trade.side == "short" &&
+      bar.close <= larp.trade.entry - (atr * atrMultiple).toFixed(2)
+    ) {
+      console.log("take profit short | close = " + bar.close);
+      larp.takeprofits(bar.close, 0.5, bar.closetimestamp);
+    }
+  }
   // Short if Red and HeikinAsh Sell
   if (
     hullSuite[1] === "RED" &&
     heikinAsh[2] === true &&
     heikinAsh[3] === true
   ) {
-    if (bar.live)
-      console.log(
-        `(live) ${bar.closetimestamp} SHORT | ${bar.close} | color=${hullSuite[1]} | short=${heikinAsh[2]} | shortFinal=${heikinAsh[3]}`
-      );
+    console.log(
+      `${bar.closetimestamp} SHORT | ${bar.close} | target=${(
+        bar.close -
+        atr * atrMultiple
+      ).toFixed(2)} color=${hullSuite[1]} | short=${heikinAsh[2]}, ${
+        heikinAsh[3]
+      }`
+    );
 
     // side, price, stop, risk, time
-    larp.open("short", bar.close, null, 100, bar.closetimestamp);
+    larp.open(
+      "short",
+      bar.close,
+      !stops ? null : bar.close + bar.close * stopConstant,
+      100,
+      bar.closetimestamp
+    );
   }
-
-  // If daily bar crossing up the 30 SMA, long
+  // call update to check for stops
   if (
     hullSuite[1] === "GREEN" &&
     heikinAsh[0] === true &&
     heikinAsh[1] === true
   ) {
-    if (bar.live)
-      console.log(
-        `(live) ${bar.closetimestamp}  LONG | ${bar.close} color=${hullSuite[1]} | long=${heikinAsh[0]} | longFinal=${heikinAsh[1]}`
-      );
+    console.log(
+      `${bar.closetimestamp}  LONG | ${bar.close} target=${(
+        bar.close +
+        atr * atrMultiple
+      ).toFixed(2)} color=${hullSuite[1]} | long=${heikinAsh[0]} ${
+        heikinAsh[1]
+      }`
+    );
 
-    larp.open("long", bar.close, null, 100, bar.closetimestamp);
+    // side, price, stop, risk, time
+    larp.open(
+      "long",
+      bar.close,
+      !stops ? null : bar.close - bar.close * stopConstant,
+      100,
+      bar.closetimestamp
+    );
   }
 
   if (larp.closed)
@@ -107,6 +164,11 @@ function onclose(bar, series) {
 
 // Required system bootup boilerplate code
 (async () => {
+  if (RUN_LIVE) {
+    feed.on("live", () =>
+      console.log("* Running live. Waiting for the current bar to close.")
+    );
+  }
   feed.on("terminate", (b) => {
     console.log("Finished. Result: ");
 

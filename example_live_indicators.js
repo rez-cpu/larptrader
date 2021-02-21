@@ -17,9 +17,9 @@ const HeikinAsh = require("./indicators/HeikinAsh");
 const RSIDiv = require("./indicators/RSIDiv");
 
 // Settings for your backtest/trading
-const RESOLUTION = "1h"; // '1m', '5m', '1h', '1d'
+const RESOLUTION = "1m"; // '1m', '5m', '1h', '1d'
 const RUN_LIVE = true; // enable live feed or not (system waits for each new bar)
-const HISTORICAL_BARS = 100; // how many bars to download before running live/backtest (max 1000)
+const HISTORICAL_BARS = 1000; // how many bars to download before running live/backtest (max 1000)
 const MAX_HISTORICAL_BARS = 1000;
 
 // const feed = new DiskFeed(__dirname+'/data/XBTUSD-1d.json');
@@ -47,7 +47,7 @@ console.log(
 //   values: [],
 // });
 
-const hma = new HMA(50);
+const hma = new HMA(180);
 const heikin = new HeikinAsh(17);
 // const rsi = new RSIDiv(14);
 
