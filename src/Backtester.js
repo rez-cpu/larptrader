@@ -117,7 +117,7 @@ class Backtester {
   // Check for stop outs etc.
   update(bar) {
     let d = new Date(Date.parse(bar.opentimestamp));
-    console.log(this.trade);
+    // console.log(this.trade);
     // Test if this is new day to reset intraday statistics
     if (this.lastbardate) {
       if (!sameday(this.lastbardate, d)) {

@@ -1,4 +1,3 @@
-
 /* 
     scrape.js
 
@@ -21,83 +20,83 @@
 
 */
 
-const fetch = require('node-fetch');
-const fs    = require('fs');
+const fetch = require("node-fetch");
+const fs = require("fs");
 
 const RESOLUTIONS = {
-    '1m': 1 * 1000 * 60,
-    '5m': 5 * 1000 * 60,
-    '1h': 60 * 1000 * 60,
-    '1d': 24 * 60 * 1000 * 60
+  "1m": 1 * 1000 * 60,
+  "5m": 5 * 1000 * 60,
+  "1h": 60 * 1000 * 60,
+  "1d": 24 * 60 * 1000 * 60,
 };
 
-
 // options 1m, 5m, 1h, 1d
-const resolution = process.argv[2] || '1h';
+const resolution = process.argv[2] || "1h";
 
-// Whatever 
+// Whatever
 const days = Number(process.argv[3]) || 14;
 
-const symbol = process.argv[4] || 'XBTUSD';
+const symbol = process.argv[4] || "XBTUSD";
 
-const from = ( Date.now() - RESOLUTIONS['1d'] * days );
-const start = new Date( from - ( from % RESOLUTIONS[ resolution ] ) );
+const from = Date.now() - RESOLUTIONS["1d"] * days;
+const start = new Date(from - (from % RESOLUTIONS[resolution]));
 
 console.log(`usage: node scrape <resolution> <number_of_days_of_data>`);
-console.log(`Scraping ${days} days of ${resolution} bar data starting ${start.toISOString()} [UTC]`);
+console.log(
+  `Scraping ${days} days of ${resolution} bar data starting ${start.toISOString()} [UTC]`
+);
 
-const delay = ms => new Promise( resolve => setTimeout( resolve, ms ));
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let historical = [];
 
-let filename = `./${symbol}-${resolution}.json`;
+let filename = `./${symbol}-${resolution}.json`;
 
-(async()=>{
+(async () => {
+  const MAX_PAGE_SIZE = 1000;
+  const res_ms = RESOLUTIONS[resolution];
 
-    const MAX_PAGE_SIZE = 1000;
-    const res_ms = RESOLUTIONS[ resolution ];
+  let page_start = start;
 
-    let page_start = start;
+  for (;;) {
+    let url = `https://www.bitmex.com/api/v1/trade/bucketed?binSize=${resolution}&partial=false&symbol=${symbol}&count=${MAX_PAGE_SIZE}&reverse=false&startTime=${encodeURI(
+      page_start.toISOString()
+    )}`;
 
-    for (;;) {
-        
-        let url = `https://www.bitmex.com/api/v1/trade/bucketed?binSize=${resolution}&partial=false&symbol=${symbol}&count=${MAX_PAGE_SIZE}&reverse=false&startTime=${encodeURI(page_start.toISOString())}`;
+    console.log(`Requesting: ${url}`);
 
-        console.log(`Requesting: ${url}`);
-        
-        let res = await fetch( url );
-        let bars = await res.json();
+    let res = await fetch(url);
+    let bars = await res.json();
 
-        if ( !bars.length ) {
-            console.log(`No data returned.`);
-            process.exit(1);
-        }
-
-        console.log(`=> Scraped ${bars.length} bars. Adding to '${filename}'. Sleeping 2.5 seconds...\n`);
-
-        // Clarify timestamps
-        for ( let b of bars ) {
-            b.openepoch = Date.parse( b.timestamp ) - res_ms;
-            b.opentimestamp = (new Date( b.openepoch )).toISOString() ; // Bitmex `timestamp` is the slightly unconventional CLOSE time of the bar
-            b.closetimestamp = b.timestamp;
-            b.retrievedtimestamp = b.timestamp;
-            delete b.timestamp;
-        }
-        
-        historical = historical.concat( bars );
-
-        fs.writeFileSync( filename, JSON.stringify( historical ) );
-
-        page_start = new Date( Date.parse( bars[ bars.length - 1 ].closetimestamp ) + res_ms );
-
-        if ( page_start.getTime() > Date.now() ) 
-            break;
-
-        // Add a request delay to avoid Arthur bitchslap
-        await delay( 2500 );
-            
+    if (!bars.length) {
+      console.log(`No data returned.`);
+      process.exit(1);
     }
 
+    console.log(
+      `=> Scraped ${bars.length} bars. Adding to '${filename}'. Sleeping 2.5 seconds...\n`
+    );
 
+    // Clarify timestamps
+    for (let b of bars) {
+      b.openepoch = Date.parse(b.timestamp) - res_ms;
+      b.opentimestamp = new Date(b.openepoch).toISOString(); // Bitmex `timestamp` is the slightly unconventional CLOSE time of the bar
+      b.closetimestamp = b.timestamp;
+      b.retrievedtimestamp = b.timestamp;
+      delete b.timestamp;
+    }
+
+    historical = historical.concat(bars);
+
+    fs.writeFileSync(filename, JSON.stringify(historical));
+
+    page_start = new Date(
+      Date.parse(bars[bars.length - 1].closetimestamp) + res_ms
+    );
+
+    if (page_start.getTime() > Date.now()) break;
+
+    // Add a request delay to avoid Arthur bitchslap
+    await delay(2500);
+  }
 })();
-

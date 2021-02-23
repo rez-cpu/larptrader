@@ -15,4 +15,12 @@ function nn(number) {
     return;
   }
 }
-module.exports = nz;
+
+function round(number) {
+  if (number) {
+    return number.toFixed(2);
+  } else {
+    return number;
+  }
+}
+module.exports = { nz, round };
